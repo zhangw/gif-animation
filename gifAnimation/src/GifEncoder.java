@@ -7,7 +7,7 @@ import java.awt.image.*;
 /**
  * Class AnimatedGifEncoder - Encodes a GIF file consisting of one or more
  * frames.
- * 
+ *
  * <pre>
  *  Example:
  *     AnimatedGifEncoder e = new AnimatedGifEncoder();
@@ -17,15 +17,15 @@ import java.awt.image.*;
  *     e.addFrame(image2);
  *     e.finish();
  * </pre>
- * 
+ *
  * No copyright asserted on the source code of this class. May be used for any
  * purpose, however, refer to the Unisys LZW patent for restrictions on use of
  * the associated LZWEncoder class. Please forward any corrections to
  * kweiner@fmsware.com.
- * 
+ *
  * @author Kevin Weiner, FM Software
  * @version 1.03 November 2003
- * 
+ *
  */
 
 public class GifEncoder {
@@ -48,13 +48,15 @@ public class GifEncoder {
 
   protected BufferedImage image; // current frame
 
-  protected byte[] pixels; // BGR byte array from frame
+  protected int[] pixels; // BGR byte array from frame
 
   protected byte[] indexedPixels; // converted frame indexed to palette
 
   protected int colorDepth; // number of bit planes
 
   protected byte[] colorTab; // RGB palette
+
+  protected boolean preserveColorTab; // stop restting of the palette for frames
 
   protected boolean[] usedEntry = new boolean[256]; // active palette entries
 
@@ -73,7 +75,7 @@ public class GifEncoder {
   /**
    * Sets the delay time between each frame, or changes it for subsequent frames
    * (applies to last frame added).
-   * 
+   *
    * @param ms
    *          int delay time in milliseconds
    */
@@ -85,7 +87,7 @@ public class GifEncoder {
    * Sets the GIF frame disposal code for the last added frame and any
    * subsequent frames. Default is 0 if no transparent color has been set,
    * otherwise 2.
-   * 
+   *
    * @param code
    *          int disposal code.
    */
@@ -99,10 +101,10 @@ public class GifEncoder {
    * Sets the number of times the set of GIF frames should be played. Default is
    * 1; 0 means play indefinitely. Must be invoked before the first image is
    * added.
-   * 
+   *
    * @param iter
    *          int number of iterations.
-   *          
+   * @return
    */
   public void setRepeat(int iter) {
     if (iter >= 0) {
@@ -116,7 +118,7 @@ public class GifEncoder {
    * process, the color in the final palette for each frame closest to the given
    * color becomes the transparent color for that frame. May be set to null to
    * indicate no transparent color.
-   * 
+   *
    * @param c
    *          Color to be treated as transparent on display.
    */
@@ -130,7 +132,7 @@ public class GifEncoder {
    * inserted. Invoking <code>finish()</code> flushes all frames. If
    * <code>setSize</code> was not invoked, the size of the first image is used
    * for all subsequent frames.
-   * 
+   *
    * @param im
    *          BufferedImage containing frame to write.
    * @return true if successful.
@@ -173,7 +175,6 @@ public class GifEncoder {
   /**
    * Flushes any pending data and closes output file. If writing to an
    * OutputStream, the stream is not closed.
-   * @return true if data output closed
    */
   public boolean finish() {
     if (!started)
@@ -206,7 +207,7 @@ public class GifEncoder {
   /**
    * Sets frame rate in frames per second. Equivalent to
    * <code>setDelay(1000/fps)</code>.
-   * 
+   *
    * @param fps
    *          float frame rate (frames per second)
    */
@@ -222,9 +223,10 @@ public class GifEncoder {
    * produce better colors, but slow processing significantly. 10 is the
    * default, and produces good color mapping at reasonable speeds. Values
    * greater than 20 do not yield significant improvements in speed.
-   * 
+   *
    * @param quality
    *          int greater than 0.
+   * @return
    */
   public void setQuality(int quality) {
     if (quality < 1)
@@ -235,7 +237,7 @@ public class GifEncoder {
   /**
    * Sets the GIF frame size. The default size is the size of the first frame
    * added if this method is not invoked.
-   * 
+   *
    * @param w
    *          int frame width.
    * @param h
@@ -256,7 +258,7 @@ public class GifEncoder {
   /**
    * Initiates GIF file creation on the given stream. The stream is not closed
    * automatically.
-   * 
+   *
    * @param os
    *          OutputStream on which GIF images are written.
    * @return false if initial write failed.
@@ -277,7 +279,7 @@ public class GifEncoder {
 
   /**
    * Initiates writing of a GIF file with the specified name.
-   * 
+   *
    * @param file
    *          String containing output file name.
    * @return false if open or initial write failed.
@@ -295,6 +297,33 @@ public class GifEncoder {
   }
 
   /**
+   * Fixes the color palette for all frames until cleared
+   */
+   public void setPalette(int[] palette_pixels, int width, int height) {
+       int len = palette_pixels.length;
+       int nPix = len / 3;
+       indexedPixels = new byte[nPix];
+       NeuQuant nq = new NeuQuant(palette_pixels, len, sample);
+       colorTab = nq.process(); // create reduced palette
+       // convert map from BGR to RGB
+       for (int i = 0; i < colorTab.length; i += 3) {
+         byte temp = colorTab[i];
+         colorTab[i] = colorTab[i + 2];
+         colorTab[i + 2] = temp;
+         usedEntry[i / 3] = false;
+       }
+       preserveColorTab = true;
+   }
+
+   /**
+    * Clears the color palette so it will be learned from each frame's pixel
+    */
+  public void clearPalette() {
+    colorTab = null;
+    preserveColorTab = false;
+  }
+
+  /**
    * Analyzes image colors and creates color map.
    */
   protected void analyzePixels() {
@@ -303,13 +332,15 @@ public class GifEncoder {
     indexedPixels = new byte[nPix];
     NeuQuant nq = new NeuQuant(pixels, len, sample);
     // initialize quantizer
-    colorTab = nq.process(); // create reduced palette
-    // convert map from BGR to RGB
-    for (int i = 0; i < colorTab.length; i += 3) {
-      byte temp = colorTab[i];
-      colorTab[i] = colorTab[i + 2];
-      colorTab[i + 2] = temp;
-      usedEntry[i / 3] = false;
+    if(!preserveColorTab) {
+      colorTab = nq.process(); // create reduced palette
+      // convert map from BGR to RGB
+      for (int i = 0; i < colorTab.length; i += 3) {
+        byte temp = colorTab[i];
+        colorTab[i] = colorTab[i + 2];
+        colorTab[i + 2] = temp;
+        usedEntry[i / 3] = false;
+      }
     }
     // map image pixels to new palette
     int k = 0;
@@ -329,7 +360,7 @@ public class GifEncoder {
 
   /**
    * Returns index of palette color closest to c
-   * 
+   *
    */
   protected int findClosest(Color c) {
     if (colorTab == null)
@@ -369,7 +400,8 @@ public class GifEncoder {
       g.drawImage(image, 0, 0, null);
       image = temp;
     }
-    pixels = ((DataBufferByte) image.getRaster().getDataBuffer()).getData();
+    int[] _pixels = null;
+    pixels = image.getRaster().getPixels(0, 0, image.getWidth(), image.getHeight(), _pixels);
   }
 
   /**
@@ -497,14 +529,14 @@ public class GifEncoder {
 /*
  * NeuQuant Neural-Net Quantization Algorithm
  * ------------------------------------------
- * 
+ *
  * Copyright (c) 1994 Anthony Dekker
- * 
+ *
  * NEUQUANT Neural-Net quantization algorithm by Anthony Dekker, 1994. See
  * "Kohonen neural networks for optimal colour quantization" in "Network:
  * Computation in Neural Systems" Vol. 5 (1994) pp 351-367. for a discussion of
  * the algorithm.
- * 
+ *
  * Any party obtaining a copy of these files from the author, directly or
  * indirectly, is granted, free of charge, a full and unrestricted irrevocable,
  * world-wide, paid up, royalty-free, nonexclusive right and license to deal in
@@ -555,11 +587,11 @@ class NeuQuant {
   /* defs for freq and bias */
   protected static final int intbiasshift = 16; /* bias for fractions */
 
-  protected static final int intbias = 1 << intbiasshift;
+  protected static final int intbias = (((int) 1) << intbiasshift);
 
   protected static final int gammashift = 10; /* gamma = 1024 */
 
-  protected static final int gamma = 1 << gammashift;
+  protected static final int gamma = (((int) 1) << gammashift);
 
   protected static final int betashift = 10;
 
@@ -575,7 +607,7 @@ class NeuQuant {
 
   protected static final int radiusbiasshift = 6; /* at 32.0 biased by 6 bits */
 
-  protected static final int radiusbias = 1 << radiusbiasshift;
+  protected static final int radiusbias = (((int) 1) << radiusbiasshift);
 
   protected static final int initradius = (initrad * radiusbias); /*
                                                                    * and
@@ -588,24 +620,24 @@ class NeuQuant {
   /* defs for decreasing alpha factor */
   protected static final int alphabiasshift = 10; /* alpha starts at 1.0 */
 
-  protected static final int initalpha = 1 << alphabiasshift;
+  protected static final int initalpha = (((int) 1) << alphabiasshift);
 
   protected int alphadec; /* biased by 10 bits */
 
   /* radbias and alpharadbias used for radpower calculation */
   protected static final int radbiasshift = 8;
 
-  protected static final int radbias = 1 << radbiasshift;
+  protected static final int radbias = (((int) 1) << radbiasshift);
 
   protected static final int alpharadbshift = (alphabiasshift + radbiasshift);
 
-  protected static final int alpharadbias = 1 << alpharadbshift;
+  protected static final int alpharadbias = (((int) 1) << alpharadbshift);
 
   /*
    * Types and Global Variables --------------------------
    */
 
-  protected byte[] thepicture; /* the input image itself */
+  protected int[] thepicture; /* the input image itself */
 
   protected int lengthcount; /* lengthcount = H*W*3 */
 
@@ -631,7 +663,7 @@ class NeuQuant {
    * Initialise network in range (0,0,0) to (255,255,255) and set parameters
    * -----------------------------------------------------------------------
    */
-  public NeuQuant(byte[] thepic, int len, int sample) {
+  public NeuQuant(int[] thepic, int len, int sample) {
 
     int i;
     int[] p;
@@ -728,7 +760,7 @@ class NeuQuant {
 
     int i, j, b, g, r;
     int radius, rad, alpha, step, delta, samplepixels;
-    byte[] p;
+    int[] p;
     int pix, lim;
 
     if (lengthcount < minpicturebytes)
@@ -882,7 +914,7 @@ class NeuQuant {
    */
   public void unbiasnet() {
 
-    int i;
+    int i, j;
 
     for (i = 0; i < netsize; i++) {
       network[i][0] >>= netbiasshift;
@@ -962,7 +994,7 @@ class NeuQuant {
     int bestpos, bestbiaspos, bestd, bestbiasd;
     int[] n;
 
-    bestd = ~(1 << 31);
+    bestd = ~(((int) 1) << 31);
     bestbiasd = bestd;
     bestpos = -1;
     bestbiaspos = bestpos;

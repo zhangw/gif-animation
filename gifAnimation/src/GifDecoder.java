@@ -127,7 +127,7 @@ public class GifDecoder {
 
 	protected byte[] pixels;
 
-	protected ArrayList<GifFrame> frames; // frames read from current file
+	protected ArrayList frames; // frames read from current file
 
 	protected int frameCount;
 
@@ -153,7 +153,7 @@ public class GifDecoder {
 		//
 		delay = -1;
 		if ((n >= 0) && (n < frameCount)) {
-			delay = frames.get(n).delay;
+			delay = ((GifFrame) frames.get(n)).delay;
 		}
 		return delay;
 	}
@@ -277,13 +277,13 @@ public class GifDecoder {
 
 	/**
 	 * Gets the image contents of frame n.
-	 * @param n : frame number
+	 * 
 	 * @return BufferedImage representation of frame, or null if n is invalid.
 	 */
 	public BufferedImage getFrame(int n) {
 		BufferedImage im = null;
 		if ((n >= 0) && (n < frameCount)) {
-			im = frames.get(n).image;
+			im = ((GifFrame) frames.get(n)).image;
 		}
 		return im;
 	}
@@ -300,8 +300,8 @@ public class GifDecoder {
 	/**
 	 * Reads GIF image from stream
 	 * 
-	 * @param is : BufferedInputStream containing GIF file.
-	 * 
+	 * @param BufferedInputStream
+	 *          containing GIF file.
 	 * @return read status code (0 = no errors)
 	 */
 	public int read(BufferedInputStream is) {
@@ -328,8 +328,8 @@ public class GifDecoder {
 	/**
 	 * Reads GIF image from stream
 	 * 
-	 * @param is : InputStream containing GIF file.
-	 * 
+	 * @param InputStream
+	 *          containing GIF file.
 	 * @return read status code (0 = no errors)
 	 */
 	public int read(InputStream is) {
@@ -359,7 +359,8 @@ public class GifDecoder {
 	 * Reads GIF file from specified file/URL source (URL assumed if name contains
 	 * ":/" or "file:")
 	 * 
-	 * @param name : String containing source
+	 * @param name
+	 *          String containing source
 	 * @return read status code (0 = no errors)
 	 */
 	public int read(String name) {
@@ -511,7 +512,7 @@ public class GifDecoder {
 	protected void init() {
 		status = STATUS_OK;
 		frameCount = 0;
-		frames = new ArrayList<GifFrame>();
+		frames = new ArrayList();
 		gct = null;
 		lct = null;
 	}
@@ -755,7 +756,7 @@ public class GifDecoder {
 	}
 
 	/**
-	 * Reads Netscape extension to obtain iteration count
+	 * Reads Netscape extenstion to obtain iteration count
 	 */
 	protected void readNetscapeExt() {
 		do {
@@ -785,9 +786,9 @@ public class GifDecoder {
 		lastRect = new Rectangle(ix, iy, iw, ih);
 		lastImage = image;
 		lastBgColor = bgColor;
-//		int dispose = 0;
-//		boolean transparency = false;
-//		int delay = 0;
+		int dispose = 0;
+		boolean transparency = false;
+		int delay = 0;
 		lct = null;
 	}
 
